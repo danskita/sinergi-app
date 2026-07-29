@@ -1,0 +1,4 @@
+# Mengabaikan file rahasia agar tidak terupload ke GitHub
+.streamlit/secrets.toml
+__pycache__/
+*.pyc

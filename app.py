@@ -58,7 +58,7 @@ if 'kurikulum' not in st.session_state:
     }
 
 # ==========================================
-# SISTEM LOGIN ORANG TUA & GURU
+# SISTEM LOGIN & PENDAFTARAN (3 TAB)
 # ==========================================
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': '', 'id_lembaga': ''})
@@ -71,14 +71,19 @@ def halaman_otentikasi():
     </div>
     """, unsafe_allow_html=True)
     
-    res_lembaga = supabase.table('info_lembaga').select('*').execute()
+    # HANYA lembaga yang berstatus "Verified" yang bisa dipilih di pendaftaran santri
+    res_lembaga = supabase.table('info_lembaga').select('*').eq('status', 'Verified').execute()
     daftar_lembaga = {l['nama_lembaga']: l['id_lembaga'] for l in res_lembaga.data} if res_lembaga.data else {}
     
-    tab_login, tab_daftar = st.tabs(["🔐 Masuk (Login)", "📝 Daftar Akun Santri Baru"])
+    tab_login, tab_daftar_santri, tab_daftar_lembaga = st.tabs([
+        "🔐 Masuk (Login)", 
+        "📝 Daftar Santri Baru", 
+        "🏛️ Daftarkan Lembaga / TPQ Baru"
+    ])
     
+    # --- TAB 1: LOGIN ---
     with tab_login:
         st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru: **admin tka a** (Pass: 123)")
-        # PERHATIKAN: Pilihan Super Admin sudah dihapus dari sini!
         peran = st.radio("Masuk Sebagai:", ["Orang Tua", "Admin / Guru"], horizontal=True)
         username = st.text_input("Username").strip().lower() 
         password = st.text_input("Password", type="password")
@@ -98,20 +103,28 @@ def halaman_otentikasi():
                 data_admin = response.data
                 if len(data_admin) > 0 and data_admin[0]['password'] == password:
                     id_lmbg = data_admin[0].get('id_lembaga', '')
-                    st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'id_lembaga': id_lmbg, 'kelas_admin': data_admin[0]['kelas']})
-                    st.rerun()
+                    # Cek apakah lembaga guru ini sudah diverifikasi Super Admin
+                    cek_lembaga = supabase.table('info_lembaga').select('status').eq('id_lembaga', id_lmbg).execute()
+                    status_lmbg = cek_lembaga.data[0].get('status', 'Verified') if cek_lembaga.data else 'Verified'
+                    
+                    if status_lmbg == 'Pending':
+                        st.warning("⏳ **Lembaga Anda sedang menunggu verifikasi dari Super Admin.**\nSilakan coba login kembali setelah pendaftaran lembaga Anda disetujui.")
+                    else:
+                        st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'id_lembaga': id_lmbg, 'kelas_admin': data_admin[0]['kelas']})
+                        st.rerun()
                 else: st.error("Username atau Password Admin salah!")
 
-    with tab_daftar:
-        st.info("Pendaftaran Santri Baru (Pilih Lembaga/Sekolah Anda dengan tepat).")
-        with st.form("form_pendaftaran"):
-            pilihan_nama_lmbg = st.selectbox("Pilih Lembaga / TPQ / Sekolah", list(daftar_lembaga.keys()) if daftar_lembaga else ["Belum ada lembaga"])
+    # --- TAB 2: DAFTAR SANTRI BARU (UNTUK ORTU) ---
+    with tab_daftar_santri:
+        st.info("Pendaftaran khusus Orang Tua Santri pada lembaga yang telah terverifikasi.")
+        with st.form("form_pendaftaran_santri"):
+            pilihan_nama_lmbg = st.selectbox("Pilih Lembaga / TPQ / Sekolah Anak", list(daftar_lembaga.keys()) if daftar_lembaga else ["Belum ada lembaga terverifikasi"])
             nama_panggilan = st.text_input("Nama Panggilan Anak", placeholder="Cth: Budi")
             kelas_anak = st.selectbox("Pilih Kelas Anak", ["TKA A", "TKA B", "TPA A", "TPA B"])
             pass_baru = st.text_input("Buat Password", value="123", type="password")
             pass_konfirm = st.text_input("Konfirmasi Password", value="123", type="password")
             
-            if st.form_submit_button("Daftar Sekarang", use_container_width=True):
+            if st.form_submit_button("Daftar Akun Santri", use_container_width=True):
                 if not daftar_lembaga: st.error("Belum ada lembaga yang tersedia di sistem.")
                 elif not nama_panggilan.strip(): st.error("Nama panggilan wajib diisi!")
                 elif pass_baru != pass_konfirm: st.error("Password tidak cocok!")
@@ -134,7 +147,56 @@ def halaman_otentikasi():
                         "capaian": {"surah": [], "doa": [], "hadist": [], "sholat": []}
                     }
                     supabase.table('santri').insert(data_baru).execute()
-                    st.success(f"✅ Akun berhasil dibuat untuk {pilihan_nama_lmbg}! Username Anda: **{username_final}**")
+                    st.success(f"✅ Akun berhasil dibuat! Username Anda: **{username_final}**")
+
+    # --- TAB 3: DAFTAR LEMBAGA BARU (MENUNGGU VERIFIKASI) ---
+    with tab_daftar_lembaga:
+        st.info("📌 Daftarkan sekolah/TPQ Anda. Pengajuan akan diproses & diverifikasi oleh Super Admin.")
+        with st.form("form_pendaftaran_lembaga"):
+            st.subheader("1. Identitas Lembaga / Sekolah")
+            id_lmbg_input = st.text_input("ID Lembaga (Tanpa spasi, huruf kecil)", placeholder="Cth: tpq_al_hidayah")
+            nama_lmbg_input = st.text_input("Nama Resmi Lembaga / TPQ", placeholder="Cth: TPQ AL-HIDAYAH BANDUNG")
+            alamat_lmbg_input = st.text_area("Alamat Lengkap Lembaga")
+            
+            st.markdown("---")
+            st.subheader("2. Akun Admin / Guru Utama (Untuk Login Pertama)")
+            user_guru_input = st.text_input("Username Admin Guru", placeholder="Cth: admin_alhidayah")
+            pass_guru_input = st.text_input("Password Admin", value="123", type="password")
+            kelas_guru_input = st.selectbox("Kelas yang Dipegang Admin Ini", ["TKA A", "TKA B", "TPA A", "TPA B"])
+            
+            if st.form_submit_button("Ajukan Pendaftaran Lembaga", use_container_width=True):
+                clean_id = id_lmbg_input.strip().lower().replace(" ", "_")
+                clean_user = user_guru_input.strip().lower()
+                
+                # Cek apakah ID lembaga atau username sudah dipakai
+                cek_id = supabase.table('info_lembaga').select('id_lembaga').eq('id_lembaga', clean_id).execute()
+                cek_usr = supabase.table('admin_kelas').select('username').eq('username', clean_user).execute()
+                
+                if not clean_id or not nama_lmbg_input.strip() or not clean_user:
+                    st.error("Semua kolom utama wajib diisi!")
+                elif len(cek_id.data) > 0:
+                    st.error("ID Lembaga tersebut sudah terdaftar! Gunakan ID lain.")
+                elif len(cek_usr.data) > 0:
+                    st.error("Username admin tersebut sudah digunakan! Gunakan username lain.")
+                else:
+                    # 1. Simpan lembaga baru dengan status "Pending" (Menunggu Verifikasi)
+                    supabase.table('info_lembaga').insert({
+                        "id_lembaga": clean_id,
+                        "nama_lembaga": nama_lmbg_input.strip(),
+                        "alamat_lembaga": alamat_lmbg_input.strip(),
+                        "status": "Pending"
+                    }).execute()
+                    
+                    # 2. Simpan akun admin guru perdana
+                    supabase.table('admin_kelas').insert({
+                        "username": clean_user,
+                        "password": pass_guru_input,
+                        "kelas": kelas_guru_input,
+                        "id_lembaga": clean_id,
+                        "status": "Pending"
+                    }).execute()
+                    
+                    st.success(f"🎉 **Pengajuan Berhasil!**\nLembaga **{nama_lmbg_input}** telah dikirim ke Super Admin.\nAnda dapat masuk setelah status pengajuan Anda disetujui/diverifikasi.")
 
 if not st.session_state['logged_in']:
     halaman_otentikasi()

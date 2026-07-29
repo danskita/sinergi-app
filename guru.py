@@ -23,6 +23,7 @@ def tampilkan_dashboard():
             
     daftar_nama_anak = list(map_nama_ke_username.keys())
     
+    # PERHATIKAN: Ada 7 tab di bawah ini, termasuk tab "⚙️ Info Lembaga"
     tab_reward, tab1, tab2, tab3, tab4, tab5, tab_sett = st.tabs([
         "🏆 Papan Reward", 
         "📝 Input Laporan", 
@@ -288,7 +289,7 @@ def tampilkan_dashboard():
         data_tabel = [{"Nama Lengkap": d.get("nama_lengkap", "-"), "Username Login": d["username"], "Password": d["password"], "No HP": d.get("no_hp", "-")} for d in data_santri_list]
         st.dataframe(data_tabel, use_container_width=True)
 
-    # --- TAB 6: PENGATURAN LEMBAGA ---
+    # --- TAB 6: PENGATURAN LEMBAGA (INI TAB MENU ALAMATNYA) ---
     with tab_sett:
         st.subheader("⚙️ Pengaturan Identitas Sekolah / TPQ")
         st.write("Ubah nama dan alamat lembaga yang akan tertera di kop halaman rapor dan pesan WhatsApp:")

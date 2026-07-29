@@ -2,12 +2,10 @@ import streamlit as st
 from supabase import create_client, Client
 import guru
 import ortu
+import admin  # <-- Tambahan Import Admin
 
 st.set_page_config(page_title="Sinergi - Multi Lembaga", page_icon="🤝", layout="wide")
 
-# ==========================================
-# 1. INISIALISASI KONEKSI SUPABASE
-# ==========================================
 @st.cache_resource
 def init_connection():
     url = st.secrets["supabase"]["url"]
@@ -18,7 +16,7 @@ supabase: Client = init_connection()
 st.session_state['supabase'] = supabase
 
 # ==========================================
-# 2. MASTER KURIKULUM TKA / TPA
+# MASTER KURIKULUM TKA / TPA
 # ==========================================
 if 'kurikulum' not in st.session_state:
     st.session_state['kurikulum'] = {
@@ -61,7 +59,7 @@ if 'kurikulum' not in st.session_state:
     }
 
 # ==========================================
-# 3. SISTEM LOGIN MULTI-LEMBAGA
+# SISTEM LOGIN MULTI-LEMBAGA + SUPER ADMIN
 # ==========================================
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': '', 'id_lembaga': ''})
@@ -74,15 +72,14 @@ def halaman_otentikasi():
     </div>
     """, unsafe_allow_html=True)
     
-    # Ambil daftar lembaga dari database untuk pilihan pendaftaran
     res_lembaga = supabase.table('info_lembaga').select('*').execute()
-    daftar_lembaga = {l['nama_lembaga']: l['id_lembaga'] for l in res_lembaga.data} if res_lembaga.data else {"TPQ AL-IKHLAS SURABAYA": "al_ikhlas"}
+    daftar_lembaga = {l['nama_lembaga']: l['id_lembaga'] for l in res_lembaga.data} if res_lembaga.data else {}
     
     tab_login, tab_daftar = st.tabs(["🔐 Masuk (Login)", "📝 Daftar Akun Santri Baru"])
     
     with tab_login:
-        st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru: **admin tka a** (Pass: 123)")
-        peran = st.radio("Masuk Sebagai:", ["Orang Tua", "Admin / Guru"], horizontal=True)
+        st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru: **admin tka a** (Pass: 123)\n- Super Admin: **superadmin** (Pass: 123)")
+        peran = st.radio("Masuk Sebagai:", ["Orang Tua", "Admin / Guru", "Super Admin (Pusat)"], horizontal=True)
         username = st.text_input("Username").strip().lower() 
         password = st.text_input("Password", type="password")
         
@@ -91,7 +88,7 @@ def halaman_otentikasi():
                 response = supabase.table('santri').select('*').eq('username', username).execute()
                 data_user = response.data
                 if len(data_user) > 0 and data_user[0]['password'] == password:
-                    id_lmbg = data_user[0].get('id_lembaga', 'al_ikhlas')
+                    id_lmbg = data_user[0].get('id_lembaga', '')
                     st.session_state.update({'logged_in': True, 'role': 'ortu', 'username': username, 'id_lembaga': id_lmbg, 'user_data': data_user[0]})
                     st.rerun()
                 else: st.error("Username atau Password Orang Tua salah!")
@@ -100,22 +97,30 @@ def halaman_otentikasi():
                 response = supabase.table('admin_kelas').select('*').eq('username', username).execute()
                 data_admin = response.data
                 if len(data_admin) > 0 and data_admin[0]['password'] == password:
-                    id_lmbg = data_admin[0].get('id_lembaga', 'al_ikhlas')
+                    id_lmbg = data_admin[0].get('id_lembaga', '')
                     st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'id_lembaga': id_lmbg, 'kelas_admin': data_admin[0]['kelas']})
                     st.rerun()
                 else: st.error("Username atau Password Admin salah!")
+                
+            elif peran == "Super Admin (Pusat)":
+                response = supabase.table('super_admin').select('*').eq('username', username).execute()
+                if len(response.data) > 0 and response.data[0]['password'] == password:
+                    st.session_state.update({'logged_in': True, 'role': 'superadmin', 'username': username})
+                    st.rerun()
+                else: st.error("Username atau Password Super Admin salah!")
 
     with tab_daftar:
         st.info("Pendaftaran Santri Baru (Pilih Lembaga/Sekolah Anda dengan tepat).")
         with st.form("form_pendaftaran"):
-            pilihan_nama_lmbg = st.selectbox("Pilih Lembaga / TPQ / Sekolah", list(daftar_lembaga.keys()))
+            pilihan_nama_lmbg = st.selectbox("Pilih Lembaga / TPQ / Sekolah", list(daftar_lembaga.keys()) if daftar_lembaga else ["Belum ada lembaga"])
             nama_panggilan = st.text_input("Nama Panggilan Anak", placeholder="Cth: Budi")
             kelas_anak = st.selectbox("Pilih Kelas Anak", ["TKA A", "TKA B", "TPA A", "TPA B"])
             pass_baru = st.text_input("Buat Password", value="123", type="password")
             pass_konfirm = st.text_input("Konfirmasi Password", value="123", type="password")
             
             if st.form_submit_button("Daftar Sekarang", use_container_width=True):
-                if not nama_panggilan.strip(): st.error("Nama panggilan wajib diisi!")
+                if not daftar_lembaga: st.error("Belum ada lembaga yang tersedia di sistem.")
+                elif not nama_panggilan.strip(): st.error("Nama panggilan wajib diisi!")
                 elif pass_baru != pass_konfirm: st.error("Password tidak cocok!")
                 else:
                     base_username = f"mama {nama_panggilan.strip().lower()}"
@@ -143,3 +148,4 @@ if not st.session_state['logged_in']:
 else:
     if st.session_state['role'] == 'ortu': ortu.tampilkan_dashboard()
     elif st.session_state['role'] == 'guru': guru.tampilkan_dashboard()
+    elif st.session_state['role'] == 'superadmin': admin.tampilkan_dashboard() # <-- Memanggil file admin.py

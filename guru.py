@@ -5,14 +5,19 @@ import urllib.parse
 def tampilkan_dashboard():
     supabase = st.session_state['supabase']
     kelas_saya = st.session_state.get('kelas_admin', 'Admin')
+    id_lmbg = st.session_state.get('id_lembaga', 'al_ikhlas')
     kurikulum = st.session_state['kurikulum']
-    info_lb = st.session_state['info_lembaga']
     
-    # Menampilkan Nama Lembaga di Top Header
-    st.markdown(f"**🏛️ {info_lb['nama']}** | 📍 _{info_lb['alamat']}_")
+    # Ambil info identitas lembaga ini dari database
+    res_lmbg = supabase.table('info_lembaga').select('*').eq('id_lembaga', id_lmbg).execute()
+    info_lb = res_lmbg.data[0] if res_lmbg.data else {"nama_lembaga": "LEMBAGA ISLAM", "alamat_lembaga": "-"}
+    
+    # Tampilkan Header Khusus Lembaga
+    st.markdown(f"**🏛️ {info_lb['nama_lembaga']}** | 📍 _{info_lb['alamat_lembaga']}_")
     st.title(f"👨‍🏫 Dasbor Guru - Kelas {kelas_saya}")
     
-    res_santri = supabase.table('santri').select('*').eq('kelas', kelas_saya).execute()
+    # FILTER DATA: Hanya ambil santri di KELAS dan LEMBAGA ini
+    res_santri = supabase.table('santri').select('*').eq('kelas', kelas_saya).eq('id_lembaga', id_lmbg).execute()
     data_santri_list = res_santri.data
     
     map_nama_ke_username = {}
@@ -23,7 +28,6 @@ def tampilkan_dashboard():
             
     daftar_nama_anak = list(map_nama_ke_username.keys())
     
-    # PERHATIKAN: Ada 7 tab di bawah ini, termasuk tab "⚙️ Info Lembaga"
     tab_reward, tab1, tab2, tab3, tab4, tab5, tab_sett = st.tabs([
         "🏆 Papan Reward", 
         "📝 Input Laporan", 
@@ -36,7 +40,7 @@ def tampilkan_dashboard():
     
     if not daftar_nama_anak:
         with tab1:
-            st.warning(f"Belum ada santri terdaftar di kelas {kelas_saya}.")
+            st.warning(f"Belum ada santri terdaftar di kelas {kelas_saya} pada lembaga {info_lb['nama_lembaga']}.")
         
     # --- TAB REWARD & PENGHARGAAN ---
     with tab_reward:
@@ -167,7 +171,7 @@ def tampilkan_dashboard():
                     supabase.table('santri').update({"capaian": capaian}).eq('username', username_terpilih).execute()
                     
                     narasi = []
-                    narasi.append(f"✨ *Assalamu'alaikum Ayah/Bunda!*\n\nAlhamdulillah, hari ini *{nama_panggilan}* ({input_kehadiran}) telah mengikuti kegiatan belajar di **{info_lb['nama']}**. Berikut progresnya:")
+                    narasi.append(f"✨ *Assalamu'alaikum Ayah/Bunda!*\n\nAlhamdulillah, hari ini *{nama_panggilan}* ({input_kehadiran}) telah mengikuti kegiatan belajar di **{info_lb['nama_lembaga']}**. Berikut progresnya:")
                     if input_jilid != "-" and input_hal != "":
                         if input_status_baca == "Lancar": narasi.append(f"📖 *Membaca:* Lancar membaca {input_jilid} Halaman {input_hal}.")
                         else: narasi.append(f"📖 *Membaca:* Mohon bantu murojaah {input_jilid} Hal {input_hal}. *(Fokus perbaikan: {input_huruf_sulit})*")
@@ -179,7 +183,7 @@ def tampilkan_dashboard():
                         
                     if input_fokus != "-" or input_adab != "-": narasi.append(f"🌱 *Sikap Kelas:* Fokus {input_fokus}, Adab {input_adab}.")
                     if input_catatan: narasi.append(f"📝 *Catatan:* _{input_catatan}_")
-                    narasi.append(f"---\n💡 Mohon klik *✅ Tandai Sudah Murojaah* di Aplikasi Sinergi jika sudah diulang di rumah.\n📍 _{info_lb['alamat']}_")
+                    narasi.append(f"---\n💡 Mohon klik *✅ Tandai Sudah Murojaah* di Aplikasi Sinergi jika sudah diulang di rumah.\n📍 _{info_lb['alamat_lembaga']}_")
 
                     laporan_akhir = "\n\n".join(narasi)
                     bulan_indo = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -289,24 +293,26 @@ def tampilkan_dashboard():
         data_tabel = [{"Nama Lengkap": d.get("nama_lengkap", "-"), "Username Login": d["username"], "Password": d["password"], "No HP": d.get("no_hp", "-")} for d in data_santri_list]
         st.dataframe(data_tabel, use_container_width=True)
 
-    # --- TAB 6: PENGATURAN LEMBAGA (INI TAB MENU ALAMATNYA) ---
+    # --- TAB 6: PENGATURAN LEMBAGA (KHUSUS LEMBAGA GURU TERSEBUT) ---
     with tab_sett:
-        st.subheader("⚙️ Pengaturan Identitas Sekolah / TPQ")
-        st.write("Ubah nama dan alamat lembaga yang akan tertera di kop halaman rapor dan pesan WhatsApp:")
+        st.subheader(f"⚙️ Identitas Lembaga: {info_lb['nama_lembaga']}")
+        st.write("Ubah nama dan alamat resmi sekolah/TPQ Anda yang tertera di kop rapor dan pesan WhatsApp:")
         
         with st.form("form_info_lembaga"):
-            nama_baru = st.text_input("Nama Lembaga / TPQ / Madrasah", value=info_lb["nama"])
-            alamat_baru = st.text_area("Alamat Lengkap", value=info_lb["alamat"])
+            nama_baru = st.text_input("Nama Lembaga / TPQ / Madrasah", value=info_lb["nama_lembaga"])
+            alamat_baru = st.text_area("Alamat Lengkap", value=info_lb["alamat_lembaga"])
             
             if st.form_submit_button("Simpan Perubahan Identitas", use_container_width=True):
-                st.session_state['info_lembaga'] = {
-                    "nama": nama_baru.strip(),
-                    "alamat": alamat_baru.strip()
-                }
-                st.success("✅ Identitas lembaga berhasil diperbarui!")
+                # Update ke database Khusus untuk ID Lembaga guru ini
+                supabase.table('info_lembaga').update({
+                    "nama_lembaga": nama_baru.strip(),
+                    "alamat_lembaga": alamat_baru.strip()
+                }).eq('id_lembaga', id_lmbg).execute()
+                
+                st.success("✅ Identitas lembaga Anda berhasil diperbarui di database cloud!")
                 st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("Keluar (Logout)", type="primary"):
-        st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': ''})
+        st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': '', 'id_lembaga': ''})
         st.rerun()

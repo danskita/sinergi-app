@@ -4,20 +4,23 @@ import datetime
 def tampilkan_dashboard():
     supabase = st.session_state['supabase']
     username = st.session_state['username']
-    info_lb = st.session_state['info_lembaga']
+    id_lmbg = st.session_state.get('id_lembaga', 'al_ikhlas')
     
+    # Ambil data siswa & info lembaga dari database
     user_res = supabase.table('santri').select('*').eq('username', username).execute()
     if not user_res.data:
         st.error("Data tidak ditemukan di Database.")
         return
-        
     user_data = user_res.data[0]
     
-    # Menampilkan Kop Resmi Lembaga
+    res_lmbg = supabase.table('info_lembaga').select('*').eq('id_lembaga', id_lmbg).execute()
+    info_lb = res_lmbg.data[0] if res_lmbg.data else {"nama_lembaga": "LEMBAGA ISLAM", "alamat_lembaga": "-"}
+    
+    # Menampilkan Kop Resmi Sesuai Lembaga Siswa
     st.markdown(f"""
     <div style="text-align: center; border-bottom: 2px solid #2E7D32; padding-bottom: 10px; margin-bottom: 20px;">
-        <h2 style="color: #2E7D32; margin-bottom: 0;">🏛️ {info_lb['nama']}</h2>
-        <p style="font-size: 14px; color: #666; margin-top: 4px;">📍 {info_lb['alamat']}</p>
+        <h2 style="color: #2E7D32; margin-bottom: 0;">🏛️ {info_lb['nama_lembaga']}</h2>
+        <p style="font-size: 14px; color: #666; margin-top: 4px;">📍 {info_lb['alamat_lembaga']}</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -49,7 +52,7 @@ def tampilkan_dashboard():
                     st.rerun()
                     
         if st.button("Keluar", type="primary"):
-            st.session_state.update({'logged_in': False, 'role': '', 'username': ''})
+            st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'id_lembaga': ''})
             st.rerun()
             
     else:
@@ -168,10 +171,10 @@ def tampilkan_dashboard():
             st.write(f"**Nomor HP/WA:** {user_data.get('no_hp', '-')}")
             st.write(f"**Gelar Penghargaan:** `{user_data.get('reward_khusus', '-')}`")
             st.markdown("---")
-            st.write(f"**Lembaga:** {info_lb['nama']}")
-            st.write(f"**Alamat:** {info_lb['alamat']}")
+            st.write(f"**Lembaga:** {info_lb['nama_lembaga']}")
+            st.write(f"**Alamat:** {info_lb['alamat_lembaga']}")
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Keluar (Logout)", type="primary"):
-            st.session_state.update({'logged_in': False, 'role': '', 'username': ''})
+            st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'id_lembaga': ''})
             st.rerun()

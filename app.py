@@ -3,7 +3,7 @@ from supabase import create_client, Client
 import guru
 import ortu
 
-st.set_page_config(page_title="Sinergi - Penghubung Guru & Ortu", page_icon="🤝", layout="wide")
+st.set_page_config(page_title="Sinergi - Multi Lembaga", page_icon="🤝", layout="wide")
 
 # ==========================================
 # 1. INISIALISASI KONEKSI SUPABASE
@@ -18,16 +18,7 @@ supabase: Client = init_connection()
 st.session_state['supabase'] = supabase
 
 # ==========================================
-# 2. PROFIL LEMBAGA (DEFAULT)
-# ==========================================
-if 'info_lembaga' not in st.session_state:
-    st.session_state['info_lembaga'] = {
-        "nama": "TKA/TPA AL-IKHLAS SURABAYA",
-        "alamat": "Jl. Pendidikan Islam No. 12, Jawa Timur"
-    }
-
-# ==========================================
-# 3. MASTER KURIKULUM TKA / TPA
+# 2. MASTER KURIKULUM TKA / TPA
 # ==========================================
 if 'kurikulum' not in st.session_state:
     st.session_state['kurikulum'] = {
@@ -70,28 +61,27 @@ if 'kurikulum' not in st.session_state:
     }
 
 # ==========================================
-# 4. SISTEM LOGIN TKA / TPA
+# 3. SISTEM LOGIN MULTI-LEMBAGA
 # ==========================================
 if 'logged_in' not in st.session_state:
-    st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': ''})
+    st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': '', 'id_lembaga': ''})
 
 def halaman_otentikasi():
-    nama_lb = st.session_state['info_lembaga']['nama']
-    alamat_lb = st.session_state['info_lembaga']['alamat']
-    
-    # Menampilkan Kop Resmi Lembaga
-    st.markdown(f"""
+    st.markdown("""
     <div style="text-align: center; border-bottom: 2px solid #2E7D32; padding-bottom: 10px; margin-bottom: 20px;">
-        <h1 style="color: #2E7D32; margin-bottom: 0;">🤝 {nama_lb}</h1>
-        <p style="font-size: 15px; color: #555; margin-top: 5px;">📍 {alamat_lb}</p>
+        <h1 style="color: #2E7D32; margin-bottom: 0;">🤝 Sinergi TPQ / Madrasah</h1>
+        <p style="font-size: 15px; color: #555; margin-top: 5px;">Aplikasi Penghubung Guru & Orang Tua (Multi-Lembaga)</p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.subheader("Aplikasi Penghubung Guru dan Orang Tua Santri")
-    tab_login, tab_daftar = st.tabs(["🔐 Masuk (Login)", "📝 Daftar Akun Baru"])
+    # Ambil daftar lembaga dari database untuk pilihan pendaftaran
+    res_lembaga = supabase.table('info_lembaga').select('*').execute()
+    daftar_lembaga = {l['nama_lembaga']: l['id_lembaga'] for l in res_lembaga.data} if res_lembaga.data else {"TPQ AL-IKHLAS SURABAYA": "al_ikhlas"}
+    
+    tab_login, tab_daftar = st.tabs(["🔐 Masuk (Login)", "📝 Daftar Akun Santri Baru"])
     
     with tab_login:
-        st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru TKA A: **admin tka a** (Pass: 123)")
+        st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru: **admin tka a** (Pass: 123)")
         peran = st.radio("Masuk Sebagai:", ["Orang Tua", "Admin / Guru"], horizontal=True)
         username = st.text_input("Username").strip().lower() 
         password = st.text_input("Password", type="password")
@@ -101,7 +91,8 @@ def halaman_otentikasi():
                 response = supabase.table('santri').select('*').eq('username', username).execute()
                 data_user = response.data
                 if len(data_user) > 0 and data_user[0]['password'] == password:
-                    st.session_state.update({'logged_in': True, 'role': 'ortu', 'username': username, 'user_data': data_user[0]})
+                    id_lmbg = data_user[0].get('id_lembaga', 'al_ikhlas')
+                    st.session_state.update({'logged_in': True, 'role': 'ortu', 'username': username, 'id_lembaga': id_lmbg, 'user_data': data_user[0]})
                     st.rerun()
                 else: st.error("Username atau Password Orang Tua salah!")
             
@@ -109,13 +100,15 @@ def halaman_otentikasi():
                 response = supabase.table('admin_kelas').select('*').eq('username', username).execute()
                 data_admin = response.data
                 if len(data_admin) > 0 and data_admin[0]['password'] == password:
-                    st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'kelas_admin': data_admin[0]['kelas']})
+                    id_lmbg = data_admin[0].get('id_lembaga', 'al_ikhlas')
+                    st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'id_lembaga': id_lmbg, 'kelas_admin': data_admin[0]['kelas']})
                     st.rerun()
                 else: st.error("Username atau Password Admin salah!")
 
     with tab_daftar:
-        st.info("Pendaftaran khusus untuk Orang Tua Santri.")
+        st.info("Pendaftaran Santri Baru (Pilih Lembaga/Sekolah Anda dengan tepat).")
         with st.form("form_pendaftaran"):
+            pilihan_nama_lmbg = st.selectbox("Pilih Lembaga / TPQ / Sekolah", list(daftar_lembaga.keys()))
             nama_panggilan = st.text_input("Nama Panggilan Anak", placeholder="Cth: Budi")
             kelas_anak = st.selectbox("Pilih Kelas Anak", ["TKA A", "TKA B", "TPA A", "TPA B"])
             pass_baru = st.text_input("Buat Password", value="123", type="password")
@@ -134,15 +127,16 @@ def halaman_otentikasi():
                         username_final = f"{base_username} {counter}"
                         counter += 1
                     
+                    id_lmbg_terpilih = daftar_lembaga[pilihan_nama_lmbg]
                     data_baru = {
                         "username": username_final, "password": pass_baru,
                         "nama_panggilan": nama_panggilan.strip(), "kelas": kelas_anak,
-                        "biodata_lengkap": False,
-                        "reward_khusus": "-",
+                        "id_lembaga": id_lmbg_terpilih,
+                        "biodata_lengkap": False, "reward_khusus": "-",
                         "capaian": {"surah": [], "doa": [], "hadist": [], "sholat": []}
                     }
                     supabase.table('santri').insert(data_baru).execute()
-                    st.success(f"✅ Akun berhasil dibuat! Username Anda: **{username_final}**")
+                    st.success(f"✅ Akun berhasil dibuat untuk {pilihan_nama_lmbg}! Username Anda: **{username_final}**")
 
 if not st.session_state['logged_in']:
     halaman_otentikasi()

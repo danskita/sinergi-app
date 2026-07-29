@@ -2,22 +2,27 @@ import streamlit as st
 import datetime
 
 def tampilkan_dashboard():
-    # Mengambil jembatan koneksi Supabase dari app.py
     supabase = st.session_state['supabase']
     username = st.session_state['username']
+    info_lb = st.session_state['info_lembaga']
     
-    # 1. AMBIL DATA SANTRI DARI DATABASE CLOUD
     user_res = supabase.table('santri').select('*').eq('username', username).execute()
-    
     if not user_res.data:
         st.error("Data tidak ditemukan di Database.")
         return
         
     user_data = user_res.data[0]
     
-    # 2. PENGUNCI LAYAR (FORM BIODATA)
+    # Menampilkan Kop Resmi Lembaga
+    st.markdown(f"""
+    <div style="text-align: center; border-bottom: 2px solid #2E7D32; padding-bottom: 10px; margin-bottom: 20px;">
+        <h2 style="color: #2E7D32; margin-bottom: 0;">🏛️ {info_lb['nama']}</h2>
+        <p style="font-size: 14px; color: #666; margin-top: 4px;">📍 {info_lb['alamat']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     if not user_data.get("biodata_lengkap", False):
-        st.warning("⚠️ Wajib melengkapi Biodata Resmi sesuai KK/KTP sebelum mengakses rapor.")
+        st.warning("⚠️ Wajib melengkapi Biodata Resmi sebelum mengakses rapor.")
         with st.form("form_biodata"):
             nama_lengkap = st.text_input("Nama Lengkap Anak (Sesuai KK)")
             nik_anak = st.text_input("NIK Anak")
@@ -30,7 +35,6 @@ def tampilkan_dashboard():
                 if not nama_lengkap or not nama_ayah or not nama_ibu or not no_hp:
                     st.error("Mohon lengkapi data utama (termasuk No HP).")
                 else:
-                    # Update data ke Supabase
                     supabase.table('santri').update({
                         "biodata_lengkap": True,
                         "nama_lengkap": nama_lengkap,
@@ -48,16 +52,24 @@ def tampilkan_dashboard():
             st.session_state.update({'logged_in': False, 'role': '', 'username': ''})
             st.rerun()
             
-    # 3. DASBOR UTAMA ORANG TUA
     else:
-        # Mengambil Laporan Harian Terakhir dari Database
         laporan_res = supabase.table('laporan_harian').select('*').eq('username_santri', username).order('created_at', desc=True).limit(1).execute()
         laporan = laporan_res.data[0] if laporan_res.data else {}
         
         nama_tampil = user_data.get("nama_lengkap") or user_data.get("nama_panggilan")
         
-        st.title(f"Laporan: {nama_tampil}")
+        st.subheader(f"Rapor Santri: {nama_tampil}")
         st.caption(f"📅 Tanggal: {laporan.get('tanggal', '-')} | 📍 Kelas: {user_data.get('kelas', '-')}")
+        
+        reward_santri = user_data.get("reward_khusus", "-")
+        if reward_santri and reward_santri != "-":
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #FFF8E1, #FFECB3); border-left: 6px solid #FFA000; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <h4 style="margin: 0; color: #B9770E;">🏆 Penghargaan & Gelar Kehormatan Santri:</h4>
+                <p style="font-size: 18px; font-weight: bold; margin: 5px 0 0 0; color: #333;">{reward_santri}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
         st.markdown("---")
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Laporan Harian", "📈 Progres Hafalan", "💬 Buku Penghubung", "📊 Rekap Bulanan", "📋 Profil Anak"])
@@ -75,7 +87,6 @@ def tampilkan_dashboard():
                 st.info(narasi)
                 if not laporan.get('status_murojaah', False):
                     if st.button("✅ Tandai Sudah Murojaah di Rumah", use_container_width=True):
-                        # Update status murojaah ke tabel Laporan di Supabase
                         supabase.table('laporan_harian').update({"status_murojaah": True}).eq('id', laporan['id']).execute()
                         st.rerun()
                 else:
@@ -115,7 +126,6 @@ def tampilkan_dashboard():
                     else: st.warning(f"⏳ {item} *(Sedang Proses)*")
 
         with tab3:
-            # Menarik data Chat dari Supabase
             chat_res = supabase.table('buku_penghubung').select('*').eq('username_santri', username).order('created_at', desc=False).execute()
             for pesan in chat_res.data:
                 if pesan["pengirim"] == "Orang Tua": st.info(f"**Anda** ({pesan['waktu_kirim']}):\n\n{pesan['isi_pesan']}")
@@ -134,8 +144,6 @@ def tampilkan_dashboard():
                     
         with tab4:
             st.subheader("📊 Rekapitulasi Kehadiran")
-            
-            # Hitung Rekap Otomatis dari Tabel Laporan
             bulan_res = supabase.table('laporan_harian').select('bulan_tahun').eq('username_santri', username).execute()
             daftar_bulan = list(set([item['bulan_tahun'] for item in bulan_res.data])) if bulan_res.data else []
             
@@ -143,8 +151,6 @@ def tampilkan_dashboard():
                 st.info("Belum ada data riwayat kehadiran bulanan.")
             else:
                 pilih_bulan = st.selectbox("Pilih Bulan", sorted(daftar_bulan, reverse=True))
-                
-                # Query menghitung jumlah kehadiran di bulan tersebut
                 rekap_hadir = len(supabase.table('laporan_harian').select('id').eq('username_santri', username).eq('bulan_tahun', pilih_bulan).eq('kehadiran', 'Hadir').execute().data)
                 rekap_sakit = len(supabase.table('laporan_harian').select('id').eq('username_santri', username).eq('bulan_tahun', pilih_bulan).eq('kehadiran', 'Sakit').execute().data)
                 rekap_izin = len(supabase.table('laporan_harian').select('id').eq('username_santri', username).eq('bulan_tahun', pilih_bulan).eq('kehadiran', 'Izin').execute().data)
@@ -160,6 +166,10 @@ def tampilkan_dashboard():
             st.write(f"**Kelas:** {user_data.get('kelas', '-')}")
             st.write(f"**Nama Lengkap:** {user_data.get('nama_lengkap', '-')}")
             st.write(f"**Nomor HP/WA:** {user_data.get('no_hp', '-')}")
+            st.write(f"**Gelar Penghargaan:** `{user_data.get('reward_khusus', '-')}`")
+            st.markdown("---")
+            st.write(f"**Lembaga:** {info_lb['nama']}")
+            st.write(f"**Alamat:** {info_lb['alamat']}")
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Keluar (Logout)", type="primary"):

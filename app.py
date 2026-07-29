@@ -3,7 +3,7 @@ from supabase import create_client, Client
 import guru
 import ortu
 
-st.set_page_config(page_title="Sinergi - Guru & Ortu", page_icon="🤝", layout="wide")
+st.set_page_config(page_title="Sinergi - Penghubung Guru & Ortu", page_icon="🤝", layout="wide")
 
 # ==========================================
 # 1. INISIALISASI KONEKSI SUPABASE
@@ -14,12 +14,20 @@ def init_connection():
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
 
-# Membuat koneksi dan menyimpannya di session_state agar bisa dipakai file lain
 supabase: Client = init_connection()
 st.session_state['supabase'] = supabase
 
 # ==========================================
-# 2. MASTER KURIKULUM (Tetap di memori karena statis)
+# 2. PROFIL LEMBAGA (DEFAULT)
+# ==========================================
+if 'info_lembaga' not in st.session_state:
+    st.session_state['info_lembaga'] = {
+        "nama": "TKA/TPA AL-IKHLAS SURABAYA",
+        "alamat": "Jl. Pendidikan Islam No. 12, Jawa Timur"
+    }
+
+# ==========================================
+# 3. MASTER KURIKULUM TKA / TPA
 # ==========================================
 if 'kurikulum' not in st.session_state:
     st.session_state['kurikulum'] = {
@@ -62,17 +70,26 @@ if 'kurikulum' not in st.session_state:
     }
 
 # ==========================================
-# 3. SISTEM LOGIN DARI DATABASE
+# 4. SISTEM LOGIN TKA / TPA
 # ==========================================
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': ''})
 
 def halaman_otentikasi():
-    st.title("🤝 Sinergi")
-    st.subheader("Aplikasi Penghubung Guru dan Orang Tua")
+    nama_lb = st.session_state['info_lembaga']['nama']
+    alamat_lb = st.session_state['info_lembaga']['alamat']
+    
+    # Menampilkan Kop Resmi Lembaga
+    st.markdown(f"""
+    <div style="text-align: center; border-bottom: 2px solid #2E7D32; padding-bottom: 10px; margin-bottom: 20px;">
+        <h1 style="color: #2E7D32; margin-bottom: 0;">🤝 {nama_lb}</h1>
+        <p style="font-size: 15px; color: #555; margin-top: 5px;">📍 {alamat_lb}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.subheader("Aplikasi Penghubung Guru dan Orang Tua Santri")
     tab_login, tab_daftar = st.tabs(["🔐 Masuk (Login)", "📝 Daftar Akun Baru"])
     
-    # --- TAB LOGIN ---
     with tab_login:
         st.info("💡 **Contoh Akun:**\n- Ortu: **mama adi** (Pass: 123)\n- Guru TKA A: **admin tka a** (Pass: 123)")
         peran = st.radio("Masuk Sebagai:", ["Orang Tua", "Admin / Guru"], horizontal=True)
@@ -81,28 +98,21 @@ def halaman_otentikasi():
         
         if st.button("Masuk Aplikasi", use_container_width=True):
             if peran == "Orang Tua":
-                # Mengambil data dari tabel 'santri' di Supabase
                 response = supabase.table('santri').select('*').eq('username', username).execute()
                 data_user = response.data
-                
                 if len(data_user) > 0 and data_user[0]['password'] == password:
                     st.session_state.update({'logged_in': True, 'role': 'ortu', 'username': username, 'user_data': data_user[0]})
                     st.rerun()
-                else: 
-                    st.error("Username atau Password Orang Tua salah!")
+                else: st.error("Username atau Password Orang Tua salah!")
             
             elif peran == "Admin / Guru":
-                # Mengambil data dari tabel 'admin_kelas' di Supabase
                 response = supabase.table('admin_kelas').select('*').eq('username', username).execute()
                 data_admin = response.data
-                
                 if len(data_admin) > 0 and data_admin[0]['password'] == password:
                     st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'kelas_admin': data_admin[0]['kelas']})
                     st.rerun()
-                else: 
-                    st.error("Username atau Password Admin salah!")
+                else: st.error("Username atau Password Admin salah!")
 
-    # --- TAB DAFTAR BARU ---
     with tab_daftar:
         st.info("Pendaftaran khusus untuk Orang Tua Santri.")
         with st.form("form_pendaftaran"):
@@ -112,43 +122,30 @@ def halaman_otentikasi():
             pass_konfirm = st.text_input("Konfirmasi Password", value="123", type="password")
             
             if st.form_submit_button("Daftar Sekarang", use_container_width=True):
-                if not nama_panggilan.strip(): 
-                    st.error("Nama panggilan wajib diisi!")
-                elif pass_baru != pass_konfirm: 
-                    st.error("Password tidak cocok!")
+                if not nama_panggilan.strip(): st.error("Nama panggilan wajib diisi!")
+                elif pass_baru != pass_konfirm: st.error("Password tidak cocok!")
                 else:
                     base_username = f"mama {nama_panggilan.strip().lower()}"
                     username_final = base_username
                     counter = 1
-                    
-                    # Mengecek di database apakah username sudah terpakai
                     while True:
                         cek_user = supabase.table('santri').select('username').eq('username', username_final).execute()
-                        if len(cek_user.data) == 0:
-                            break
+                        if len(cek_user.data) == 0: break
                         username_final = f"{base_username} {counter}"
                         counter += 1
                     
-                    # Menyisipkan (Insert) data baru ke tabel Supabase
                     data_baru = {
-                        "username": username_final,
-                        "password": pass_baru,
-                        "nama_panggilan": nama_panggilan.strip(),
-                        "kelas": kelas_anak,
+                        "username": username_final, "password": pass_baru,
+                        "nama_panggilan": nama_panggilan.strip(), "kelas": kelas_anak,
                         "biodata_lengkap": False,
+                        "reward_khusus": "-",
                         "capaian": {"surah": [], "doa": [], "hadist": [], "sholat": []}
                     }
-                    
                     supabase.table('santri').insert(data_baru).execute()
-                    st.success(f"✅ Akun berhasil dibuat dan tersimpan di database! Username Anda: **{username_final}**")
+                    st.success(f"✅ Akun berhasil dibuat! Username Anda: **{username_final}**")
 
-# ==========================================
-# 4. PENGATUR HALAMAN
-# ==========================================
 if not st.session_state['logged_in']:
     halaman_otentikasi()
 else:
-    if st.session_state['role'] == 'ortu': 
-        ortu.tampilkan_dashboard()
-    elif st.session_state['role'] == 'guru': 
-        guru.tampilkan_dashboard()
+    if st.session_state['role'] == 'ortu': ortu.tampilkan_dashboard()
+    elif st.session_state['role'] == 'guru': guru.tampilkan_dashboard()

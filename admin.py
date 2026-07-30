@@ -23,7 +23,8 @@ def tampilkan_dashboard():
                 st.info("Belum ada lembaga yang terdaftar.")
             else:
                 for lmbg in list_lembaga:
-                    with st.expander(f"📌 {lmbg['nama_lembaga']} (ID: {lmbg['id_lembaga']})"):
+                    badge_status = "🟢 AKTIF" if lmbg.get('status') == 'Verified' else "🟡 MENUNGGU VERIFIKASI"
+                    with st.expander(f"📌 {lmbg['nama_lembaga']} | {badge_status} (ID: {lmbg['id_lembaga']})"):
                         st.write(f"**Alamat:** {lmbg['alamat_lembaga']}")
                         if st.button("🗑️ Hapus Lembaga Ini", key=f"del_{lmbg['id_lembaga']}"):
                             supabase.table('info_lembaga').delete().eq('id_lembaga', lmbg['id_lembaga']).execute()
@@ -45,7 +46,8 @@ def tampilkan_dashboard():
                         supabase.table('info_lembaga').insert({
                             "id_lembaga": clean_id,
                             "nama_lembaga": nama_lmbg_baru.strip(),
-                            "alamat_lembaga": alamat_lmbg_baru.strip()
+                            "alamat_lembaga": alamat_lmbg_baru.strip(),
+                            "status": "Verified"  # <-- DITAMBAHKAN AGAR LANGSUNG AKTIF
                         }).execute()
                         st.success("✅ Lembaga baru berhasil ditambahkan!")
                         st.rerun()
@@ -57,7 +59,8 @@ def tampilkan_dashboard():
         st.subheader("➕ Buat Akun Guru/Admin Baru untuk Lembaga")
         st.caption("Super Admin dapat membuat akun login untuk ustadz/ustadzah di setiap lembaga.")
         
-        res_lmbg = supabase.table('info_lembaga').select('*').execute()
+        # Hanya ambil lembaga yang sudah diverifikasi
+        res_lmbg = supabase.table('info_lembaga').select('*').eq('status', 'Verified').execute()
         map_lembaga = {l['nama_lembaga']: l['id_lembaga'] for l in res_lmbg.data} if res_lmbg.data else {}
         
         if not map_lembaga:
@@ -77,7 +80,8 @@ def tampilkan_dashboard():
                             "username": user_guru.strip().lower(),
                             "password": pass_guru,
                             "kelas": kelas_guru,
-                            "id_lembaga": map_lembaga[pilih_lmbg]
+                            "id_lembaga": map_lembaga[pilih_lmbg],
+                            "status": "Active"  # <-- DITAMBAHKAN AGAR GURU BISA LANGSUNG LOGIN
                         }).execute()
                         st.success(f"✅ Akun guru '{user_guru}' untuk {pilih_lmbg} berhasil dibuat!")
 

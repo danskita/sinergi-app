@@ -1,22 +1,24 @@
 import streamlit as st
 import datetime
+import random  # <-- TAMBAHAN: Untuk memilih motivasi Islami secara acak
 
 def tampilkan_dashboard():
     supabase = st.session_state['supabase']
     username = st.session_state['username']
     id_lmbg = st.session_state.get('id_lembaga', 'al_ikhlas')
     
-    # Ambil data siswa & info lembaga dari database
+    # 1. Ambil data siswa dari database
     user_res = supabase.table('santri').select('*').eq('username', username).execute()
     if not user_res.data:
-        st.error("Data tidak ditemukan di Database.")
+        st.error("Data santri tidak ditemukan di Database.")
         return
     user_data = user_res.data[0]
     
+    # 2. Ambil data lembaga dari database
     res_lmbg = supabase.table('info_lembaga').select('*').eq('id_lembaga', id_lmbg).execute()
     info_lb = res_lmbg.data[0] if res_lmbg.data else {"nama_lembaga": "LEMBAGA ISLAM", "alamat_lembaga": "-"}
     
-    # Menampilkan Kop Resmi Sesuai Lembaga Siswa
+    # 3. Menampilkan Kop Resmi Sesuai Lembaga Siswa
     st.markdown(f"""
     <div style="text-align: center; border-bottom: 2px solid #2E7D32; padding-bottom: 10px; margin-bottom: 20px;">
         <h2 style="color: #2E7D32; margin-bottom: 0;">🏛️ {info_lb['nama_lembaga']}</h2>
@@ -24,8 +26,9 @@ def tampilkan_dashboard():
     </div>
     """, unsafe_allow_html=True)
     
+    # 4. Form Biodata Lengkap Jika Belum Diisi
     if not user_data.get("biodata_lengkap", False):
-        st.warning("⚠️ Wajib melengkapi Biodata Resmi sebelum mengakses rapor.")
+        st.warning("⚠️ Wajib melengkapi Biodata Resmi sebelum mengakses rapor anak.")
         with st.form("form_biodata"):
             nama_lengkap = st.text_input("Nama Lengkap Anak (Sesuai KK)")
             nik_anak = st.text_input("NIK Anak")
@@ -55,11 +58,34 @@ def tampilkan_dashboard():
             st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'id_lembaga': ''})
             st.rerun()
             
+    # 5. Dashboard Utama Orang Tua
     else:
+        nama_tampil = user_data.get("nama_lengkap") or user_data.get("nama_panggilan")
+
+        # =========================================================
+        # BANNER ELEGAN & MOTIVASI HARIAN ORANG TUA (BARU)
+        # =========================================================
+        daftar_motivasi_ortu = [
+            "“Anak adalah amanah. Mendampingi mereka belajar Al-Qur'an hari ini adalah investasi mahkota cahaya di akhirat kelak.”",
+            "“Rumah yang di dalamnya dibacakan Al-Qur'an akan terlihat oleh penduduk langit seperti bintang-bintang di bumi.”",
+            "“Doakan anak di setiap sujud, karena doa orang tua untuk anaknya seperti doa nabi untuk umatnya.”",
+            "“Satu halaman Iqro yang diulang bersama Ayah/Bunda di rumah akan membekas indah dalam ingatan anak selamanya.”"
+        ]
+        motivasi_ortu = random.choice(daftar_motivasi_ortu)
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1B5E20 0%, #4CAF50 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="font-size: 14px; opacity: 0.9; margin-bottom: 6px;">🏛️ <b>{info_lb['nama_lembaga']}</b> | 📍 {info_lb['alamat_lembaga']}</div>
+            <h2 style="color: white; margin: 0 0 12px 0;">Assalamu'alaikum, Ayah/Bunda {nama_tampil}! 🌟</h2>
+            <p style="font-size: 15px; margin: 0; background-color: rgba(255,255,255,0.18); padding: 12px 16px; border-radius: 8px; font-style: italic;">
+                ✨ {motivasi_ortu}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        # =========================================================
+
         laporan_res = supabase.table('laporan_harian').select('*').eq('username_santri', username).order('created_at', desc=True).limit(1).execute()
         laporan = laporan_res.data[0] if laporan_res.data else {}
-        
-        nama_tampil = user_data.get("nama_lengkap") or user_data.get("nama_panggilan")
         
         st.subheader(f"Rapor Santri: {nama_tampil}")
         st.caption(f"📅 Tanggal: {laporan.get('tanggal', '-')} | 📍 Kelas: {user_data.get('kelas', '-')}")

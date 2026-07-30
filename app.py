@@ -3,19 +3,31 @@ from supabase import create_client, Client
 import guru
 import ortu
 
-st.set_page_config(page_title="Sinergi - Penghubung Orang Tua & Guru", page_icon="🤝", layout="wide")
+# ==========================================
+# 1. PENGATURAN HALAMAN & KONEKSI SUPABASE
+# ==========================================
+st.set_page_config(
+    page_title="Sinergi - Penghubung Orang Tua & Guru",
+    page_icon="🤝",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 @st.cache_resource
 def init_connection():
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
-    return create_client(url, key)
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error("Gagal terhubung ke Supabase. Pastikan rahasia (secrets) sudah dikonfigurasi dengan benar.")
+        st.stop()
 
 supabase: Client = init_connection()
 st.session_state['supabase'] = supabase
 
 # ==========================================
-# MASTER KURIKULUM TKA / TPA
+# 2. MASTER KURIKULUM TKA / TPA
 # ==========================================
 if 'kurikulum' not in st.session_state:
     st.session_state['kurikulum'] = {
@@ -58,24 +70,35 @@ if 'kurikulum' not in st.session_state:
     }
 
 # ==========================================
-# INISIALISASI SESSION STATE
+# 3. INISIALISASI SESSION STATE
 # ==========================================
 if 'logged_in' not in st.session_state:
-    st.session_state.update({'logged_in': False, 'role': '', 'username': '', 'kelas_admin': '', 'id_lembaga': ''})
+    st.session_state.update({
+        'logged_in': False, 
+        'role': '', 
+        'username': '', 
+        'kelas_admin': '', 
+        'id_lembaga': '', 
+        'user_data': None
+    })
+
 if 'logged_in_super' not in st.session_state:
     st.session_state['logged_in_super'] = False
 
 # ==========================================
-# NAVIGASI SIDEBAR (PILIHAN PORTAL)
+# 4. NAVIGASI SIDEBAR (PILIHAN PORTAL)
 # ==========================================
 st.sidebar.title("📌 Navigasi Menu")
-pilih_portal = st.sidebar.radio("Pilih Portal Akses:", ["Portal Utama (Guru & Ortu)", "Portal Super Admin (Pusat)"])
+pilih_portal = st.sidebar.radio(
+    "Pilih Portal Akses:", 
+    ["Portal Utama (Guru & Ortu)", "Portal Super Admin (Pusat)"]
+)
 
 st.sidebar.markdown("---")
 st.sidebar.info("🤝 **Sinergi**\nAplikasi Penghubung Orang Tua dan Guru")
 
 # ==========================================
-# HALAMAN 1: PORTAL SUPER ADMIN
+# 5. PORTAL SUPER ADMIN
 # ==========================================
 if pilih_portal == "Portal Super Admin (Pusat)":
     if not st.session_state['logged_in_super']:
@@ -209,7 +232,7 @@ if pilih_portal == "Portal Super Admin (Pusat)":
             st.rerun()
 
 # ==========================================
-# HALAMAN 2: PORTAL UTAMA (GURU & ORTU)
+# 6. PORTAL UTAMA (GURU & ORTU)
 # ==========================================
 elif pilih_portal == "Portal Utama (Guru & Ortu)":
     if not st.session_state['logged_in']:
@@ -241,9 +264,16 @@ elif pilih_portal == "Portal Utama (Guru & Ortu)":
                     data_user = response.data
                     if len(data_user) > 0 and data_user[0]['password'] == password:
                         id_lmbg = data_user[0].get('id_lembaga', '')
-                        st.session_state.update({'logged_in': True, 'role': 'ortu', 'username': username, 'id_lembaga': id_lmbg, 'user_data': data_user[0]})
+                        st.session_state.update({
+                            'logged_in': True, 
+                            'role': 'ortu', 
+                            'username': username, 
+                            'id_lembaga': id_lmbg, 
+                            'user_data': data_user[0]
+                        })
                         st.rerun()
-                    else: st.error("Username atau Password Orang Tua salah!")
+                    else:
+                        st.error("Username atau Password Orang Tua salah!")
                 
                 elif peran == "Admin / Guru":
                     response = supabase.table('admin_kelas').select('*').eq('username', username).execute()
@@ -256,9 +286,16 @@ elif pilih_portal == "Portal Utama (Guru & Ortu)":
                         if status_lmbg == 'Pending':
                             st.warning("⏳ **Lembaga Anda sedang menunggu verifikasi dari Super Admin.**\nSilakan coba login kembali setelah pendaftaran lembaga Anda disetujui.")
                         else:
-                            st.session_state.update({'logged_in': True, 'role': 'guru', 'username': username, 'id_lembaga': id_lmbg, 'kelas_admin': data_admin[0]['kelas']})
+                            st.session_state.update({
+                                'logged_in': True, 
+                                'role': 'guru', 
+                                'username': username, 
+                                'id_lembaga': id_lmbg, 
+                                'kelas_admin': data_admin[0]['kelas']
+                            })
                             st.rerun()
-                    else: st.error("Username atau Password Admin salah!")
+                    else:
+                        st.error("Username atau Password Admin salah!")
 
         with tab_daftar_santri:
             st.info("Pendaftaran khusus Orang Tua Santri pada lembaga yang telah terverifikasi.")
@@ -270,25 +307,32 @@ elif pilih_portal == "Portal Utama (Guru & Ortu)":
                 pass_konfirm = st.text_input("Konfirmasi Password", value="123", type="password")
                 
                 if st.form_submit_button("Daftar Akun Santri", use_container_width=True):
-                    if not daftar_lembaga: st.error("Belum ada lembaga yang tersedia di sistem.")
-                    elif not nama_panggilan.strip(): st.error("Nama panggilan wajib diisi!")
-                    elif pass_baru != pass_konfirm: st.error("Password tidak cocok!")
+                    if not daftar_lembaga:
+                        st.error("Belum ada lembaga yang tersedia di sistem.")
+                    elif not nama_panggilan.strip():
+                        st.error("Nama panggilan wajib diisi!")
+                    elif pass_baru != pass_konfirm:
+                        st.error("Password tidak cocok!")
                     else:
                         base_username = f"mama {nama_panggilan.strip().lower()}"
                         username_final = base_username
                         counter = 1
                         while True:
                             cek_user = supabase.table('santri').select('username').eq('username', username_final).execute()
-                            if len(cek_user.data) == 0: break
+                            if len(cek_user.data) == 0:
+                                break
                             username_final = f"{base_username} {counter}"
                             counter += 1
                         
                         id_lmbg_terpilih = daftar_lembaga[pilihan_nama_lmbg]
                         data_baru = {
-                            "username": username_final, "password": pass_baru,
-                            "nama_panggilan": nama_panggilan.strip(), "kelas": kelas_anak,
+                            "username": username_final, 
+                            "password": pass_baru,
+                            "nama_panggilan": nama_panggilan.strip(), 
+                            "kelas": kelas_anak,
                             "id_lembaga": id_lmbg_terpilih,
-                            "biodata_lengkap": False, "reward_khusus": "-",
+                            "biodata_lengkap": False, 
+                            "reward_khusus": "-",
                             "capaian": {"surah": [], "doa": [], "hadist": [], "sholat": []}
                         }
                         supabase.table('santri').insert(data_baru).execute()
@@ -339,5 +383,7 @@ elif pilih_portal == "Portal Utama (Guru & Ortu)":
                         
                         st.success(f"🎉 **Pengajuan Berhasil!**\nLembaga **{nama_lmbg_input}** telah dikirim ke Super Admin.\nAnda dapat masuk setelah status pengajuan Anda disetujui/diverifikasi.")
     else:
-        if st.session_state['role'] == 'ortu': ortu.tampilkan_dashboard()
-        elif st.session_state['role'] == 'guru': guru.tampilkan_dashboard()
+        if st.session_state['role'] == 'ortu':
+            ortu.tampilkan_dashboard()
+        elif st.session_state['role'] == 'guru':
+            guru.tampilkan_dashboard()

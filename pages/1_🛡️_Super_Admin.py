@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 
-st.set_page_config(page_title="Pusat Pengendali - Super Admin", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Sinergi - Portal Super Admin", page_icon="🛡️", layout="wide")
 
 # ==========================================
 # INISIALISASI SUPABASE KARENA INI JENDELA TERPISAH
@@ -42,8 +42,8 @@ if not st.session_state['logged_in_super']:
 # DASBOR MANAJEMEN LEMBAGA & AKUN GURU
 # ==========================================
 else:
-    st.title("🛡️ Pusat Pengendali Super Admin")
-    st.subheader("Manajemen Daftar Lembaga / TPQ / Sekolah & Akun Guru")
+    st.title("🛡️ Pusat Pengendali Sinergi")
+    st.subheader("Manajemen Lembaga / TPQ & Persetujuan Pengajuan Baru")
     
     tab_lembaga, tab_guru = st.tabs(["🏛️ Kelola Lembaga", "👨‍🏫 Kelola Akun Guru"])
     
